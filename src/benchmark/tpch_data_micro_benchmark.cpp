@@ -12,6 +12,7 @@
 #include "operators/join_hash.hpp"
 #include "operators/table_scan.hpp"
 #include "operators/table_wrapper.hpp"
+#include "operators/validate.hpp"
 #include "scheduler/operator_task.hpp"
 #include "storage/encoding_type.hpp"
 #include "tpch/tpch_table_generator.hpp"
@@ -130,8 +131,6 @@ BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6FirstScanPredicate)(benchmar
   }
 }
 
-<<<<<<< Updated upstream
-=======
 BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6Validate)(benchmark::State& state) {
   const auto transaction_context = Hyrise::get().transaction_manager.new_transaction_context();
   for (auto _ : state) {
@@ -141,7 +140,6 @@ BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6Validate)(benchmark::State& 
   }
 }
 
->>>>>>> Stashed changes
 BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6SecondScanPredicate)(benchmark::State& state) {
   const auto first_scan = std::make_shared<TableScan>(_table_wrapper_map.at("lineitem"), _tpchq6_discount_predicate);
   first_scan->execute();
