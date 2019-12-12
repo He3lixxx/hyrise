@@ -71,14 +71,7 @@ bool IndexScanRule::_is_index_scan_applicable(const IndexStatistics& index_stati
 
   if (index_statistics.column_ids[0] != operator_predicate.column_id) return false;
 
-  const auto row_count_table =
-      cost_estimator->cardinality_estimator->estimate_cardinality(predicate_node->left_input());
-  if (row_count_table < INDEX_SCAN_ROW_COUNT_THRESHOLD) return false;
-
-  const auto row_count_predicate = cost_estimator->cardinality_estimator->estimate_cardinality(predicate_node);
-  const float selectivity = row_count_predicate / row_count_table;
-
-  return selectivity <= INDEX_SCAN_SELECTIVITY_THRESHOLD;
+  return true;
 }
 
 bool IndexScanRule::_is_single_segment_index(const IndexStatistics& index_statistics) {

@@ -27,7 +27,7 @@ class TPCHDataMicroBenchmarkFixture : public MicroBenchmarkBasicFixture {
  public:
   void SetUp(::benchmark::State& state) {
     auto& sm = Hyrise::get().storage_manager;
-    const auto scale_factor = 0.001f;
+    const auto scale_factor = 1.f;
     const auto default_encoding = EncodingType::Dictionary;
 
     auto benchmark_config = BenchmarkConfig::get_default_config();
@@ -130,6 +130,18 @@ BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6FirstScanPredicate)(benchmar
   }
 }
 
+<<<<<<< Updated upstream
+=======
+BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6Validate)(benchmark::State& state) {
+  const auto transaction_context = Hyrise::get().transaction_manager.new_transaction_context();
+  for (auto _ : state) {
+    const auto validate = std::make_shared<Validate>(_table_wrapper_map.at("lineitem"));
+    validate->set_transaction_context(transaction_context);
+    validate->execute();
+  }
+}
+
+>>>>>>> Stashed changes
 BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6SecondScanPredicate)(benchmark::State& state) {
   const auto first_scan = std::make_shared<TableScan>(_table_wrapper_map.at("lineitem"), _tpchq6_discount_predicate);
   first_scan->execute();
