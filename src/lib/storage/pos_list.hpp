@@ -3,6 +3,7 @@
 #include <utility>
 #include <vector>
 
+#include "./chunk.hpp"
 #include "types.hpp"
 #include "utils/assert.hpp"
 
@@ -27,10 +28,102 @@ struct PosList final : private pmr_vector<RowID> {
   using const_reference = Vector::const_reference;
   using pointer = Vector::pointer;
   using const_pointer = Vector::const_pointer;
-  using iterator = Vector::iterator;
   using const_iterator = Vector::const_iterator;
   using reverse_iterator = Vector::reverse_iterator;
   using const_reverse_iterator = Vector::const_reverse_iterator;
+
+  /********************************************
+  * MatchesAllIterator
+  *******************************************/
+  class MatchesAllIterator {
+   public:
+    // TODO: Do we want to give out a random access iterator? This breaks quite some stuff then
+    // (We can not return pointers or references that do make much sense. Modification breaks.)
+    using iterator_category = std::input_iterator_tag;
+    using value_type = RowID;
+    using difference_type = size_t;
+    using pointer = RowID*;
+    using reference = const RowID&;
+
+    MatchesAllIterator(ChunkID chunk_id, ChunkOffset offset) : _current_row_id({chunk_id, offset}){};
+    MatchesAllIterator(MatchesAllIterator& other) = default;
+
+    MatchesAllIterator& operator=(const MatchesAllIterator&) = default;
+
+    MatchesAllIterator& operator++() {
+      _current_row_id.chunk_offset++;
+      return *this;
+    }
+
+    const MatchesAllIterator operator++(int) {
+      MatchesAllIterator retval = *this;
+      ++(*this);
+      return retval;
+    }
+
+    bool operator==(MatchesAllIterator other) const { return _current_row_id == other._current_row_id; }
+
+    bool operator!=(MatchesAllIterator other) const { return !(*this == other); }
+
+    reference operator*() const { return _current_row_id; }
+
+   private:
+    RowID _current_row_id;
+  };
+
+  /********************************************
+  * Iterator - wrapper to either Vector::iterator or MatchesAllIterator
+  *******************************************/
+  class iterator {
+   public:
+    iterator() = delete;
+    iterator(std::unique_ptr<Vector::iterator> _vector_base_it) : _vector_base_it(std::move(_vector_base_it)){};
+    iterator(std::unique_ptr<MatchesAllIterator> _matches_all_base_it)
+        : _matches_all_base_it(std::move(_matches_all_base_it)){};
+
+    iterator(iterator& from)
+        : _vector_base_it(from._vector_base_it ? std::make_unique<Vector::iterator>(*from._vector_base_it) : nullptr),
+          _matches_all_base_it(
+              from._matches_all_base_it ? std::make_unique<MatchesAllIterator>(*from._matches_all_base_it) : nullptr) {}
+
+    iterator& operator=(iterator& from) {
+      if (from._vector_base_it) {
+        _vector_base_it = std::make_unique<Vector::iterator>(*from._vector_base_it);
+        _matches_all_base_it = nullptr;
+      } else {
+        _vector_base_it = nullptr;
+        _matches_all_base_it = std::make_unique<MatchesAllIterator>(*from._matches_all_base_it);
+      }
+      return *this;
+    }
+
+    bool operator==(iterator& other) {
+      return _vector_base_it ? *_vector_base_it == *other._vector_base_it
+                             : *_matches_all_base_it == *other._matches_all_base_it;
+    }
+
+    bool operator!=(iterator& other) { return !(*this == other); }
+
+    const RowID& operator*() { return _vector_base_it ? **_vector_base_it : **_matches_all_base_it; };
+
+    iterator& operator++() {
+      if (_vector_base_it)
+        ++(*_vector_base_it);
+      else
+        ++(*_matches_all_base_it);
+      return *this;
+    }
+
+    const iterator operator++(int) {
+      iterator retval = *this;
+      ++(*this);
+      return retval;
+    }
+
+   private:
+    std::unique_ptr<Vector::iterator> _vector_base_it;
+    std::unique_ptr<MatchesAllIterator> _matches_all_base_it;
+  };
 
   /* (1 ) */ PosList() noexcept(noexcept(allocator_type())) {}
   /* (1 ) */ explicit PosList(const allocator_type& allocator) noexcept : Vector(allocator) {}
@@ -50,6 +143,10 @@ struct PosList final : private pmr_vector<RowID> {
   /* (7+) */ PosList(Vector&& other, const allocator_type& alloc) : Vector(std::move(other), alloc) {}
   /* (8 ) */ PosList(std::initializer_list<RowID> init, const allocator_type& alloc = allocator_type())
       : Vector(std::move(init), alloc) {}
+
+  /* custom ctor: Match all entries in the given chunk */
+  explicit PosList(std::shared_ptr<const Chunk> matches_all_chunk, const ChunkID chunkID)
+      : _matches_all_chunk(matches_all_chunk), _chunk_id(chunkID), _references_single_chunk(true) {}
 
   PosList& operator=(PosList&& other) = default;
 
@@ -91,7 +188,21 @@ struct PosList final : private pmr_vector<RowID> {
   using Vector::front;
 
   // Iterators
-  using Vector::begin;
+  iterator begin() {
+    if (_matches_all_chunk) {
+      return iterator(std::make_unique<MatchesAllIterator>(_chunk_id, ChunkOffset(0)));
+    }
+    return iterator(std::make_unique<Vector::iterator>(Vector::begin()));
+  }
+
+  iterator end() {
+    if (_matches_all_chunk) {
+      ChunkOffset size = _matches_all_chunk->size();
+      return iterator(std::make_unique<MatchesAllIterator>(_chunk_id, size));
+    }
+    return iterator(std::make_unique<Vector::iterator>(Vector::begin()));
+  }
+
   using Vector::cbegin;
   using Vector::cend;
   using Vector::crbegin;
@@ -120,10 +231,14 @@ struct PosList final : private pmr_vector<RowID> {
   using Vector::swap;
 
   friend bool operator==(const PosList& lhs, const PosList& rhs);
+
   friend bool operator==(const PosList& lhs, const pmr_vector<RowID>& rhs);
+
   friend bool operator==(const pmr_vector<RowID>& lhs, const PosList& rhs);
 
  private:
+  std::shared_ptr<const Chunk> _matches_all_chunk;
+  const ChunkID _chunk_id;
   bool _references_single_chunk = false;
 };
 

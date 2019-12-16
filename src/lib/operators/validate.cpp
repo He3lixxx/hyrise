@@ -211,24 +211,21 @@ void Validate::_validate_chunks(const std::shared_ptr<const Table>& in_table, co
       DebugAssert(chunk_in->has_mvcc_data(), "Trying to use Validate on a table that has no MVCC data");
       const auto mvcc_data = chunk_in->get_scoped_mvcc_data_lock();
 
-      temp_pos_list.guarantee_single_chunk();
 
       if (_can_use_chunk_shortcut && _is_entire_chunk_visible(chunk_in, snapshot_commit_id)) {
-        const auto chunk_size = chunk_in->size();
-        temp_pos_list.resize(chunk_size);
-        for (auto chunk_offset = 0u; chunk_offset < chunk_size; ++chunk_offset) {
-          temp_pos_list[chunk_offset] = RowID{chunk_id, chunk_offset};
-        }
+        // Generate a posList that matches all rows in chunk_in
+        pos_list_out = std::make_shared<const PosList>(chunk_in);
       } else {
         // Generate pos_list_out.
+        temp_pos_list.guarantee_single_chunk();
         auto chunk_size = chunk_in->size();  // The compiler fails to optimize this in the for clause :(
         for (auto i = 0u; i < chunk_size; i++) {
           if (opossum::is_row_visible(our_tid, snapshot_commit_id, i, *mvcc_data)) {
             temp_pos_list.emplace_back(RowID{chunk_id, i});
           }
         }
+        pos_list_out = std::make_shared<const PosList>(std::move(temp_pos_list));
       }
-      pos_list_out = std::make_shared<const PosList>(std::move(temp_pos_list));
 
       // Create actual ReferenceSegment objects.
       for (ColumnID column_id{0}; column_id < chunk_in->column_count(); ++column_id) {

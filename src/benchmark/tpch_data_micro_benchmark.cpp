@@ -133,12 +133,12 @@ BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6FirstScanPredicate)(benchmar
 }
 
 BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6Validate)(benchmark::State& state) {
-    const auto transaction_context = Hyrise::get().transaction_manager.new_transaction_context();
-    for (auto _ : state) {
-        const auto validate = std::make_shared<Validate>(_table_wrapper_map.at("lineitem"));
-        validate->set_transaction_context(transaction_context);
-        validate->execute();
-    }
+  const auto transaction_context = Hyrise::get().transaction_manager.new_transaction_context();
+  for (auto _ : state) {
+    const auto validate = std::make_shared<Validate>(_table_wrapper_map.at("lineitem"));
+    validate->set_transaction_context(transaction_context);
+    validate->execute();
+  }
 }
 
 BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6SecondScanPredicate)(benchmark::State& state) {

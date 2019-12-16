@@ -71,6 +71,8 @@ void segment_with_iterators_filtered(const BaseSegment& base_segment,
     return;
   }
 
+  // TODO: Maybe we can implement a shortcut here?
+
   if constexpr (std::is_same_v<T, ResolveDataTypeTag>) {
     resolve_data_type(base_segment.data_type(), [&](const auto data_type_t) {
       using ColumnDataType = typename decltype(data_type_t)::type;
