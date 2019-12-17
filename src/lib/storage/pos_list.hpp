@@ -34,15 +34,16 @@ struct PosList final : private pmr_vector<RowID> {
   /********************************************
   * MatchesAllIterator
   *******************************************/
+  template<bool Const = false>
   class MatchesAllIterator {
    public:
     // TODO: Do we want to give out a random access iterator? This breaks quite some stuff then
     // (We can not return pointers or references that do make much sense. Modification breaks.)
     using iterator_category = std::input_iterator_tag;
     using value_type = RowID;
-    using difference_type = size_t;
-    using pointer = RowID*;
-    using reference = const RowID&;
+    using difference_type = std::ptrdiff_t;
+    using reference = typename std::conditional_t<Const, RowID const &, RowID &>;
+    using pointer = typename std::conditional_t<Const, RowID const *, RowID *>;
 
     MatchesAllIterator(const ChunkID chunk_id, const ChunkOffset offset) : _current_row_id({chunk_id, offset}){};
     MatchesAllIterator(const MatchesAllIterator& other) = default;
@@ -64,7 +65,13 @@ struct PosList final : private pmr_vector<RowID> {
 
     bool operator!=(MatchesAllIterator other) const { return !(*this == other); }
 
-    reference operator*() const { return _current_row_id; }
+    template<bool _Const = Const>
+    std::enable_if_t<_Const, reference>
+    operator*() const { return _current_row_id;}
+
+    template<bool _Const = Const>
+    std::enable_if_t<!_Const, reference>
+    operator*() { return _current_row_id;}
 
    private:
     RowID _current_row_id;
@@ -73,9 +80,11 @@ struct PosList final : private pmr_vector<RowID> {
   /********************************************
   * Iterator - wrapper to either Vector::iterator or MatchesAllIterator
   *******************************************/
-  template<bool Const = false>
+  template<bool Const = false, class BaseVectorIterator = Vector::iterator, class BaseMatchesAllIterator = MatchesAllIterator<Const>>
   class IteratorWrapper {
    public:
+    // TODO: The returned iterators are used as random access iterators, e.g. there is a std::sort call.
+    // Thus, to properly support this, we'd need to properly implement a random access iterator
     using iterator_category = std::input_iterator_tag;
     using value_type = RowID;
     using difference_type = std::ptrdiff_t;
@@ -84,13 +93,13 @@ struct PosList final : private pmr_vector<RowID> {
 
     IteratorWrapper() = delete;
     IteratorWrapper(std::unique_ptr<Vector::iterator> _vector_base_it) : _vector_base_it(std::move(_vector_base_it)){};
-    IteratorWrapper(std::unique_ptr<MatchesAllIterator> _matches_all_base_it)
+    IteratorWrapper(std::unique_ptr<BaseMatchesAllIterator> _matches_all_base_it)
         : _matches_all_base_it(std::move(_matches_all_base_it)){};
 
     IteratorWrapper(IteratorWrapper& from)
         : _vector_base_it(from._vector_base_it ? std::make_unique<Vector::iterator>(*from._vector_base_it) : nullptr),
           _matches_all_base_it(
-              from._matches_all_base_it ? std::make_unique<MatchesAllIterator>(*from._matches_all_base_it) : nullptr) {}
+              from._matches_all_base_it ? std::make_unique<BaseMatchesAllIterator>(*from._matches_all_base_it) : nullptr) {}
 
     IteratorWrapper& operator=(IteratorWrapper& from) {
       if (from._vector_base_it) {
@@ -98,7 +107,7 @@ struct PosList final : private pmr_vector<RowID> {
         _matches_all_base_it = nullptr;
       } else {
         _vector_base_it = nullptr;
-        _matches_all_base_it = std::make_unique<MatchesAllIterator>(*from._matches_all_base_it);
+        _matches_all_base_it = std::make_unique<BaseMatchesAllIterator>(*from._matches_all_base_it);
       }
       return *this;
     }
@@ -133,8 +142,8 @@ struct PosList final : private pmr_vector<RowID> {
     }
 
    private:
-    std::unique_ptr<Vector::iterator> _vector_base_it;
-    std::unique_ptr<MatchesAllIterator> _matches_all_base_it;
+    std::unique_ptr<BaseVectorIterator> _vector_base_it;
+    std::unique_ptr<BaseMatchesAllIterator> _matches_all_base_it;
   };
 
   using iterator = IteratorWrapper<false>;
@@ -206,25 +215,19 @@ struct PosList final : private pmr_vector<RowID> {
   using Vector::front;
 
   // Iterators
-  // TODO: Fix this const stuff. There should be a const overload returning a const_iterator and a non-const overload returning an iterator
   iterator begin() noexcept {
-    return iterator(std::make_unique<MatchesAllIterator>(_matches_all_chunk_id, ChunkOffset(0)));
-
-    /* if (_matches_all_chunk) { */
-    /*   return iterator(std::make_unique<MatchesAllIterator>(_matches_all_chunk_id, ChunkOffset(0))); */
-    /* } */
-    /* return iterator(std::make_unique<Vector::iterator>(Vector::begin())); */
+    if (_matches_all_chunk) {
+      return iterator(std::make_unique<MatchesAllIterator<false>>(_matches_all_chunk_id, ChunkOffset(0)));
+    }
+    return iterator(std::make_unique<Vector::iterator>(Vector::begin()));
   }
 
   iterator end() noexcept {
-    ChunkOffset size = _matches_all_chunk->size();
-    return iterator(std::make_unique<MatchesAllIterator>(_matches_all_chunk_id, ChunkOffset(size)));
-
-    /* if (_matches_all_chunk) { */
-    /*   ChunkOffset size = _matches_all_chunk->size(); */
-    /*   return iterator(std::make_unique<MatchesAllIterator>(_matches_all_chunk_id, size)); */
-    /* } */
-    /* return iterator(std::make_unique<Vector::iterator>(Vector::end())); */
+    if (_matches_all_chunk) {
+      ChunkOffset size = _matches_all_chunk->size();
+      return iterator(std::make_unique<MatchesAllIterator<false>>(_matches_all_chunk_id, size));
+    }
+    return iterator(std::make_unique<Vector::iterator>(Vector::end()));
   }
 
 
