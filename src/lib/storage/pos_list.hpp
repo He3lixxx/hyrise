@@ -3,8 +3,10 @@
 #include <utility>
 #include <vector>
 
+#include "./chunk.hpp"
 #include "types.hpp"
 #include "utils/assert.hpp"
+#include "utils/performance_warning.hpp"
 
 namespace opossum {
 
@@ -51,6 +53,10 @@ struct PosList final : private pmr_vector<RowID> {
   /* (8 ) */ PosList(std::initializer_list<RowID> init, const allocator_type& alloc = allocator_type())
       : Vector(std::move(init), alloc) {}
 
+  /* custom ctor: Match all entries in the given chunk */
+  explicit PosList(std::shared_ptr<const Chunk> matches_all_chunk, const ChunkID chunkID)
+      : _matches_all_chunk(matches_all_chunk), _matches_all_chunk_id(chunkID), _references_single_chunk(true) {}
+
   PosList& operator=(PosList&& other) = default;
 
   // If all entries in the PosList shares a single ChunkID, it makes sense to explicitly give this guarantee in order
@@ -72,6 +78,10 @@ struct PosList final : private pmr_vector<RowID> {
     return _references_single_chunk;
   }
 
+  bool matches_complete_chunk() const {
+    return _matches_all_chunk != nullptr;
+  }
+
   // For chunks that share a common ChunkID, returns that ID.
   ChunkID common_chunk_id() const {
     DebugAssert(references_single_chunk(),
@@ -80,62 +90,233 @@ struct PosList final : private pmr_vector<RowID> {
     return (*this)[0].chunk_id;
   }
 
-  using Vector::assign;
-  using Vector::get_allocator;
+  /* using Vector::assign; */
+  /* using Vector::get_allocator; */
 
   // Element access
   // using Vector::at; - Oh no. People have misused this in the past.
-  using Vector::operator[];
-  using Vector::back;
-  using Vector::data;
-  using Vector::front;
+  /* using Vector::back; */
+  /* using Vector::data; */
+  /* using Vector::front; */
+
+  reference operator[] (size_type n) {
+    _materialize_if_necessary();
+    return Vector::operator[](n);
+  }
+
+  const_reference operator[] (size_type n) const {
+    // TODO: No need to materialize here
+    const_cast<PosList*>(this)->_materialize_if_necessary();
+    return Vector::operator[](n);
+  }
 
   // Iterators
-  using Vector::begin;
-  using Vector::cbegin;
-  using Vector::cend;
-  using Vector::crbegin;
-  using Vector::crend;
-  using Vector::end;
-  using Vector::rbegin;
-  using Vector::rend;
+  iterator begin() {
+    _materialize_if_necessary();
+    return Vector::begin();
+  }
+
+  const_iterator begin() const {
+    return cbegin();
+  }
+
+  iterator end() {
+    _materialize_if_necessary();
+    return Vector::end();
+  }
+
+  const_iterator end() const {
+    return cend();
+  }
+
+  const_iterator cbegin() const {
+    const_cast<PosList*>(this)->_materialize_if_necessary();
+    return Vector::cbegin();
+  }
+
+  const_iterator cend() const {
+    const_cast<PosList*>(this)->_materialize_if_necessary();
+    return Vector::cend();
+  }
+
+  const_reverse_iterator crbegin() const {
+    const_cast<PosList*>(this)->_materialize_if_necessary();
+    return Vector::crbegin();
+  }
+
+  const_reverse_iterator crend() const {
+    const_cast<PosList*>(this)->_materialize_if_necessary();
+    return Vector::crend();
+  }
+
+  reverse_iterator rbegin() {
+    _materialize_if_necessary();
+    return Vector::rbegin();
+  }
+
+  reverse_iterator rend() {
+    _materialize_if_necessary();
+    return Vector::rend();
+  }
+
+  const_reverse_iterator rbegin() const {
+    return crbegin();
+  }
+
+  const_reverse_iterator rend() const {
+    return crend();
+  }
 
   // Capacity
-  using Vector::capacity;
-  using Vector::empty;
-  using Vector::max_size;
-  using Vector::reserve;
+  /* using Vector::capacity; */
+  /* using Vector::max_size; */
+
+  // Using these two should be save.
   using Vector::shrink_to_fit;
-  using Vector::size;
+  using Vector::reserve;
+
+  size_t size() const {
+    const_cast<PosList*>(this)->_materialize_if_necessary();
+    return Vector::size();
+  }
+
+  void clear() noexcept{
+    _matches_all_chunk = nullptr;
+    _matches_all_chunk_id = INVALID_CHUNK_ID;
+    Vector::clear();
+  }
+
+  bool empty() const {
+    return size() == 0;
+  }
 
   // Modifiers
-  using Vector::clear;
-  using Vector::emplace;
-  using Vector::emplace_back;
-  using Vector::erase;
-  using Vector::insert;
-  using Vector::pop_back;
-  using Vector::push_back;
-  using Vector::resize;
-  using Vector::swap;
+  /* using Vector::emplace; */
+  /* using Vector::erase; */
+  /* using Vector::insert; */
+  /* using Vector::swap; */
+
+  iterator insert (const_iterator position, const value_type& val) {
+    _materialize_if_necessary();
+    return Vector::insert(position, val);
+  }
+
+  iterator insert (const_iterator position, size_type n, const value_type& val) {
+    _materialize_if_necessary();
+    return Vector::insert(position, n, val);
+  }
+
+  template<typename _InputIterator,
+           typename = std::_RequireInputIter<_InputIterator>>
+  iterator insert (const_iterator position, _InputIterator first, _InputIterator last) {
+    _materialize_if_necessary();
+    return Vector::insert(position, first, last);
+  }
+
+  iterator insert (const_iterator position, value_type&& val) {
+    _materialize_if_necessary();
+    return Vector::insert(position, val);
+  }
+
+  iterator insert (const_iterator position, std::initializer_list<value_type> il) {
+    _materialize_if_necessary();
+    return Vector::insert(position, il);
+  }
+
+  template <class... Args>
+  void emplace_back (Args&&... args) {
+    _materialize_if_necessary();
+    Vector::emplace_back(std::forward<Args>(args)...);
+  }
+
+  void pop_back() {
+    _materialize_if_necessary();
+    return Vector::pop_back();
+  }
+
+  void push_back (const value_type& val) {
+    _materialize_if_necessary();
+    return Vector::push_back(val);
+  }
+
+  void push_back (value_type&& val) {
+    _materialize_if_necessary();
+    return Vector::push_back(val);
+  }
+
+  void resize (size_type n) {
+    _materialize_if_necessary();
+    return Vector::resize(n);
+  }
+
+  void resize (size_type n, const value_type& val) {
+    _materialize_if_necessary();
+    return Vector::resize(n, val);
+  }
 
   friend bool operator==(const PosList& lhs, const PosList& rhs);
+
   friend bool operator==(const PosList& lhs, const pmr_vector<RowID>& rhs);
+
   friend bool operator==(const pmr_vector<RowID>& lhs, const PosList& rhs);
 
  private:
+  // TODO: This is needed in many noexcept methods - can we somehow work around the resize call
+  // This method should only access vector methods, non of the overriden methods - they would probably call _materialize again
+  // leading to endless recursion
+  void _materialize() {
+    if (_matches_all_chunk == nullptr)
+      std::cout << "_matches_all_chunk was nullptr" << std::endl;
+    if (_matches_all_chunk_id == INVALID_CHUNK_ID)
+      std::cout << "_matches_all_chunk_id was INVALID_CHUNK_ID" << std::endl;
+    if (Vector::size() != 0)
+      std::cout << "size was not 0" << std::endl;
+
+    std::cout << "Materializing posList" << std::endl;
+
+    DebugAssert(_matches_all_chunk != nullptr, "Called materialize on poslist that is already materialized");
+    DebugAssert(_matches_all_chunk_id != INVALID_CHUNK_ID, "Called materialize on poslist that is already materialized");
+    DebugAssert(Vector::size() == 0, "Unexpected precondition on PosList::_materialize");
+    PerformanceWarning("Materializing PosList that had a _matches_all_chunk set");
+
+    ChunkOffset chunk_size = _matches_all_chunk->size();
+    Vector::resize(chunk_size);
+
+    for(ChunkOffset offset = ChunkOffset{0}; offset < chunk_size; ++offset) {
+      Vector::operator[](offset) = {_matches_all_chunk_id, offset};
+    }
+
+    _matches_all_chunk = nullptr;
+    _matches_all_chunk_id = INVALID_CHUNK_ID;
+  }
+
+  void _materialize_if_necessary() {
+    if (_matches_all_chunk) {
+      _materialize();
+    }
+  }
+
+  std::shared_ptr<const Chunk> _matches_all_chunk = nullptr;
+  ChunkID _matches_all_chunk_id = INVALID_CHUNK_ID;
   bool _references_single_chunk = false;
 };
 
 inline bool operator==(const PosList& lhs, const PosList& rhs) {
+  // TODO: We could get away without materializing here
+  const_cast<PosList&>(lhs)._materialize_if_necessary();
+  const_cast<PosList&>(rhs)._materialize_if_necessary();
   return static_cast<const pmr_vector<RowID>&>(lhs) == static_cast<const pmr_vector<RowID>&>(rhs);
 }
 
 inline bool operator==(const PosList& lhs, const pmr_vector<RowID>& rhs) {
+  // TODO: We could get away without materializing here
+  const_cast<PosList&>(lhs)._materialize_if_necessary();
   return static_cast<const pmr_vector<RowID>&>(lhs) == rhs;
 }
 
 inline bool operator==(const pmr_vector<RowID>& lhs, const PosList& rhs) {
+  // TODO: We could get away without materializing here
+  const_cast<PosList&>(rhs)._materialize_if_necessary();
   return lhs == static_cast<const pmr_vector<RowID>&>(rhs);
 }
 
