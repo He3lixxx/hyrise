@@ -55,7 +55,9 @@ struct PosList final : private pmr_vector<RowID> {
 
   /* custom ctor: Match all entries in the given chunk */
   explicit PosList(std::shared_ptr<const Chunk> matches_all_chunk, const ChunkID chunkID)
-      : _matches_all_chunk(matches_all_chunk), _matches_all_chunk_id(chunkID), _references_single_chunk(true) {}
+      : _matches_all_chunk(matches_all_chunk), _matches_all_chunk_id(chunkID) {
+        guarantee_single_chunk();
+      }
 
   PosList& operator=(PosList&& other) = default;
 
@@ -75,6 +77,11 @@ struct PosList final : private pmr_vector<RowID> {
           }(),
           "Chunk was marked as referencing only a single chunk, but references more");
     }
+
+    if (_matches_all_chunk) {
+      DebugAssert(_references_single_chunk == true, "Chunk was marked to reference a whole chunk but references_single_chunk would return false");
+    }
+
     return _references_single_chunk;
   }
 
@@ -87,6 +94,11 @@ struct PosList final : private pmr_vector<RowID> {
     DebugAssert(references_single_chunk(),
                 "Can only retrieve the common_chunk_id if the PosList is guaranteed to reference a single chunk.");
     Assert(!empty(), "Cannot retrieve common_chunk_id of an empty chunk");
+
+    if (_matches_all_chunk) {
+      return _matches_all_chunk_id;
+    }
+
     return (*this)[0].chunk_id;
   }
 
@@ -265,15 +277,6 @@ struct PosList final : private pmr_vector<RowID> {
   // This method should only access vector methods, non of the overriden methods - they would probably call _materialize again
   // leading to endless recursion
   void _materialize() {
-    if (_matches_all_chunk == nullptr)
-      std::cout << "_matches_all_chunk was nullptr" << std::endl;
-    if (_matches_all_chunk_id == INVALID_CHUNK_ID)
-      std::cout << "_matches_all_chunk_id was INVALID_CHUNK_ID" << std::endl;
-    if (Vector::size() != 0)
-      std::cout << "size was not 0" << std::endl;
-
-    std::cout << "Materializing posList" << std::endl;
-
     DebugAssert(_matches_all_chunk != nullptr, "Called materialize on poslist that is already materialized");
     DebugAssert(_matches_all_chunk_id != INVALID_CHUNK_ID, "Called materialize on poslist that is already materialized");
     DebugAssert(Vector::size() == 0, "Unexpected precondition on PosList::_materialize");
@@ -291,7 +294,7 @@ struct PosList final : private pmr_vector<RowID> {
   }
 
   void _materialize_if_necessary() {
-    if (_matches_all_chunk) {
+    if (matches_complete_chunk()) {
       _materialize();
     }
   }
@@ -301,22 +304,54 @@ struct PosList final : private pmr_vector<RowID> {
   bool _references_single_chunk = false;
 };
 
+inline bool matches_all_equal_to_materialized(const PosList& matches_all_list, const pmr_vector<RowID>& materialized_list) {
+  DebugAssert(matches_all_list.matches_complete_chunk(), "called with invalid first argument");
+
+  if (matches_all_list.size() != materialized_list.size()) {
+    return false;
+  }
+
+  // TODO: We maybe want to use an iterator here if we implement a non-materializing iterator on the PosList
+  RowID expected_id{matches_all_list.common_chunk_id(), ChunkOffset{0}};
+
+  for (const auto& materialized_row_id : materialized_list) {
+    if (expected_id == materialized_row_id) {
+      expected_id.chunk_offset++;
+    } else {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 inline bool operator==(const PosList& lhs, const PosList& rhs) {
-  // TODO: We could get away without materializing here
-  const_cast<PosList&>(lhs)._materialize_if_necessary();
-  const_cast<PosList&>(rhs)._materialize_if_necessary();
+  if (lhs.matches_complete_chunk() && rhs.matches_complete_chunk()) {
+    return lhs._matches_all_chunk == rhs._matches_all_chunk;
+  }
+  if (lhs.matches_complete_chunk()) {
+    return matches_all_equal_to_materialized(lhs, rhs);
+  }
+  if (rhs.matches_complete_chunk()) {
+    return matches_all_equal_to_materialized(rhs, lhs);
+  }
+
   return static_cast<const pmr_vector<RowID>&>(lhs) == static_cast<const pmr_vector<RowID>&>(rhs);
 }
 
 inline bool operator==(const PosList& lhs, const pmr_vector<RowID>& rhs) {
-  // TODO: We could get away without materializing here
-  const_cast<PosList&>(lhs)._materialize_if_necessary();
+  if (lhs.matches_complete_chunk()) {
+    return matches_all_equal_to_materialized(lhs, rhs);
+  }
+
   return static_cast<const pmr_vector<RowID>&>(lhs) == rhs;
 }
 
 inline bool operator==(const pmr_vector<RowID>& lhs, const PosList& rhs) {
-  // TODO: We could get away without materializing here
-  const_cast<PosList&>(rhs)._materialize_if_necessary();
+  if (rhs.matches_complete_chunk()) {
+    return matches_all_equal_to_materialized(rhs, lhs);
+  }
+
   return lhs == static_cast<const pmr_vector<RowID>&>(rhs);
 }
 
