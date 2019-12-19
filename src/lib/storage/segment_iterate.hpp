@@ -66,7 +66,7 @@ template <typename T = ResolveDataTypeTag, EraseTypes erase_iterator_types = Era
           typename Functor>
 void segment_with_iterators_filtered(const BaseSegment& base_segment,
                                      const std::shared_ptr<const PosList>& position_filter, const Functor& functor) {
-  if (!position_filter) {
+  if (!position_filter || position_filter->matches_complete_chunk()) {
     segment_with_iterators<T, erase_iterator_types>(base_segment, functor);
     return;
   }
