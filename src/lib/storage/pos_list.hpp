@@ -218,8 +218,7 @@ struct PosList final : private pmr_vector<RowID> {
     return Vector::insert(position, n, val);
   }
 
-  template<typename _InputIterator,
-           typename = std::_RequireInputIter<_InputIterator>>
+  template<typename _InputIterator>
   iterator insert (const_iterator position, _InputIterator first, _InputIterator last) {
     _materialize_if_necessary();
     return Vector::insert(position, first, last);
