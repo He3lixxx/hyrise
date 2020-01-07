@@ -814,13 +814,13 @@ class JoinSortMerge::JoinSortMergeImpl : public AbstractJoinOperatorImpl {
 
     // Determine the required space
     size_t total_size = 0;
-    for (auto& pos_list : pos_lists) {
+    for (const auto& pos_list : pos_lists) {
       total_size += pos_list->size();
     }
 
     // Move the entries over the output pos list
     output->reserve(total_size);
-    for (auto& pos_list : pos_lists) {
+    for (const auto& pos_list : pos_lists) {
       output->insert(output->end(), pos_list->begin(), pos_list->end());
     }
 
