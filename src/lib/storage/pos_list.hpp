@@ -122,6 +122,8 @@ struct PosList final : private pmr_vector<RowID> {
     return Vector::operator[](n);
   }
 
+  // TODO: We defined that pos lists shouldn't be modified anymore once they are
+  // in a reference segment -> none of these iterator methods should materialize
   // Iterators
   iterator begin() {
     _materialize_if_necessary();
