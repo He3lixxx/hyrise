@@ -188,8 +188,11 @@ struct PosList final : private pmr_vector<RowID> {
   using Vector::reserve;
 
   size_t size() const {
-    const_cast<PosList*>(this)->_materialize_if_necessary();
-    return Vector::size();
+    if (matches_complete_chunk()) {
+      return _matches_all_chunk->size();
+    } else {
+      return Vector::size();
+    }
   }
 
   void clear() noexcept{
