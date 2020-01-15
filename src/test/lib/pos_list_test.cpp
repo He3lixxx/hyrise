@@ -4,10 +4,6 @@
 #include "operators/get_table.hpp"
 #include "operators/table_wrapper.hpp"
 #include "operators/maintenance/create_table.hpp"
-#include "gtest/gtest.h"
-#include "storage/pos_list.hpp"
-#include "operators/table_wrapper.hpp"
-#include "operators/maintenance/create_table.hpp"
 
 namespace opossum {
 
