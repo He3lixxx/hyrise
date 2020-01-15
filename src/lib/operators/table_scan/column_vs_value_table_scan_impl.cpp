@@ -105,6 +105,10 @@ void ColumnVsValueTableScanImpl::_scan_dictionary_segment(const BaseDictionarySe
   auto iterable = create_iterable_from_attribute_vector(segment);
 
   if (_value_matches_all(segment, search_value_id)) {
+    if (!_in_table->column_is_nullable(_column_id) && !position_filter && matches.empty()) {
+      matches = PosList(_in_table->get_chunk(chunk_id), chunk_id);
+      return;
+    }
     iterable.with_iterators(position_filter, [&](auto it, auto end) {
       static const auto always_true = [](const auto&) { return true; };
       // Matches all, so include all rows except those with NULLs in the result.
