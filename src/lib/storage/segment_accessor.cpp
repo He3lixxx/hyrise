@@ -17,10 +17,10 @@ std::unique_ptr<AbstractSegmentAccessor<T>> CreateSegmentAccessor<T>::create(
         // that checks for the reference being NULL, we can simply use the NullAccessor, which always returns nullopt,
         // i.e., the accessors representation of NULL values.
         // Note that this is independent of the row being pointed to holding a NULL value.
-        if (pos_list[ChunkOffset{0}].is_null()) {
+        if (pos_list.common_chunk_id() == INVALID_CHUNK_ID) {
           accessor = std::make_unique<NullAccessor<T>>();
         } else {
-          auto chunk_id = pos_list[ChunkOffset{0}].chunk_id;
+          auto chunk_id = pos_list.common_chunk_id();
           auto referenced_segment =
               typed_segment.referenced_table()->get_chunk(chunk_id)->get_segment(typed_segment.referenced_column_id());
 

@@ -31,15 +31,17 @@ class ReferenceSegmentIterable : public SegmentIterable<ReferenceSegmentIterable
 
     const auto& pos_list = _segment.pos_list();
 
-    const auto begin_it = pos_list->begin();
-    const auto end_it = pos_list->end();
+    if (pos_list->size() == 0) {
+      // No entries to call the functor for -> nothing to do
+      return;
+    }
 
+    ChunkID single_referenced_chunk_id;
     // If we are guaranteed that the reference segment refers to a single non-NULL chunk, we can do some optimizations.
     // For example, we can use a single, non-virtual segment accessor instead of having to keep multiple and using
-    // virtual method calls. If begin_it is NULL, chunk_id will be INVALID_CHUNK_ID. Therefore, we skip this case.
-
-    if (pos_list->references_single_chunk() && pos_list->size() > 0 && !begin_it->is_null()) {
-      auto referenced_segment = referenced_table->get_chunk(begin_it->chunk_id)->get_segment(referenced_column_id);
+    // virtual method calls. Keep in mind common_chunk_id() might return INVALID_CHUNK_ID for NULL values
+    if (pos_list->references_single_chunk() && (single_referenced_chunk_id = pos_list->common_chunk_id()) != INVALID_CHUNK_ID) {
+      auto referenced_segment = referenced_table->get_chunk(single_referenced_chunk_id)->get_segment(referenced_column_id);
 
       bool functor_was_called = false;
 
@@ -99,6 +101,8 @@ class ReferenceSegmentIterable : public SegmentIterable<ReferenceSegmentIterable
 
       auto accessors = std::make_shared<Accessors>(referenced_table->chunk_count());
 
+      auto begin_it = pos_list->begin();
+      auto end_it = pos_list->end();
       auto begin = MultipleChunkIterator{referenced_table, referenced_column_id, accessors, begin_it, begin_it};
       auto end = MultipleChunkIterator{referenced_table, referenced_column_id, accessors, begin_it, end_it};
 

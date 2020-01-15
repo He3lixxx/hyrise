@@ -141,8 +141,7 @@ std::shared_ptr<const Table> TableScan::_on_execute() {
 
             size_t offset = 0;
             for (const auto& match : *matches_out) {
-              const auto row_id = (*pos_list_in)[match.chunk_offset];
-              (*filtered_pos_list)[offset] = row_id;
+              (*filtered_pos_list)[offset] = pos_list_in->non_materializing_access(match.chunk_offset);
               ++offset;
             }
           }

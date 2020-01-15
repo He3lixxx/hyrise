@@ -863,7 +863,7 @@ inline void write_output_segments(Segments& output_segments, const std::shared_p
               *new_pos_list_iter = row;
             } else {
               const auto& referenced_pos_list = *(*input_table_pos_lists)[row.chunk_id];
-              *new_pos_list_iter = referenced_pos_list[row.chunk_offset];
+              *new_pos_list_iter = referenced_pos_list.non_materializing_access(row.chunk_offset);
             }
             ++new_pos_list_iter;
           }

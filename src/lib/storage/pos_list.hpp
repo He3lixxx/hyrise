@@ -67,7 +67,7 @@ struct PosList final : private pmr_vector<RowID> {
 
   // Returns whether the single ChunkID has been given (not necessarily, if it has been met)
   bool references_single_chunk() const {
-    if (_references_single_chunk) {
+    if (_references_single_chunk && !_matches_all_chunk) {
       DebugAssert(
           [&]() {
             if (size() == 0) return true;
@@ -119,6 +119,14 @@ struct PosList final : private pmr_vector<RowID> {
   const_reference operator[] (size_type n) const {
     // TODO: No need to materialize here
     const_cast<PosList*>(this)->_materialize_if_necessary();
+    return Vector::operator[](n);
+  }
+
+  value_type non_materializing_access (size_type n) const {
+    if (matches_complete_chunk()) {
+      return RowID{_matches_all_chunk_id, static_cast<ChunkOffset>(n)};
+    }
+
     return Vector::operator[](n);
   }
 
