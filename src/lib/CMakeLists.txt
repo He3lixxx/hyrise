@@ -404,6 +404,7 @@ set(
     statistics/table_statistics.hpp
     statistics/attribute_statistics.cpp
     statistics/attribute_statistics.hpp
+    storage/abstract_pos_list.hpp
     storage/base_dictionary_segment.hpp
     storage/base_encoded_segment.cpp
     storage/base_encoded_segment.hpp
@@ -473,6 +474,7 @@ set(
     storage/mvcc_data.cpp
     storage/mvcc_data.hpp
     storage/pos_list.hpp
+    storage/pos_list.cpp
     storage/prepared_plan.cpp
     storage/prepared_plan.hpp
     storage/reference_segment.cpp

@@ -15,6 +15,7 @@ template <typename T, typename Dictionary>
 class DictionarySegmentIterable : public PointAccessibleSegmentIterable<DictionarySegmentIterable<T, Dictionary>> {
  public:
   using ValueType = T;
+  using PointAccessibleSegmentIterable<DictionarySegmentIterable<T, Dictionary>>::_on_with_iterators;  // needed because of “name hiding”
 
   explicit DictionarySegmentIterable(const DictionarySegment<T>& segment)
       : _segment{segment}, _dictionary(segment.dictionary()) {}
@@ -110,7 +111,7 @@ class DictionarySegmentIterable : public PointAccessibleSegmentIterable<Dictiona
   template <typename ZsDecompressorType, typename DictionaryIteratorType, typename _SubIteratorType>
   class PointAccessIterator
       : public BasePointAccessSegmentIterator<PointAccessIterator<ZsDecompressorType, DictionaryIteratorType, _SubIteratorType>,
-                                              SegmentPosition<T>> {
+                                              SegmentPosition<T>, _SubIteratorType> {
    public:
     using ValueType = T;
     using IterableType = DictionarySegmentIterable<T, Dictionary>;
@@ -118,9 +119,9 @@ class DictionarySegmentIterable : public PointAccessibleSegmentIterable<Dictiona
 
     PointAccessIterator(DictionaryIteratorType dictionary_begin_it, const ValueID null_value_id,
                         const std::shared_ptr<ZsDecompressorType>& attribute_decompressor,
-                        SubIteratorType position_filter_begin, SubIteratorType position_filter_it)
+                        _SubIteratorType position_filter_begin, _SubIteratorType position_filter_it)
         : BasePointAccessSegmentIterator<PointAccessIterator<ZsDecompressorType, DictionaryIteratorType, SubIteratorType>,
-                                         SegmentPosition<T>> {std::move(position_filter_begin),
+                                         SegmentPosition<T>, _SubIteratorType> {std::move(position_filter_begin),
                                                              std::move(position_filter_it)},
           _dictionary_begin_it{dictionary_begin_it},
           _null_value_id{null_value_id},

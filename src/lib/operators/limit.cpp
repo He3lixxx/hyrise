@@ -81,8 +81,10 @@ std::shared_ptr<const Table> Limit::_on_execute() {
         output_column_id = input_ref_segment->referenced_column_id();
         referenced_table = input_ref_segment->referenced_table();
         // TODO(all): optimize using whole chunk whenever possible
-        auto begin = input_ref_segment->pos_list()->begin();
-        std::copy(begin, begin + output_chunk_row_count, output_pos_list->begin());
+        resolve_pos_list_type(*input_ref_segment->pos_list(), [&output_pos_list, &output_chunk_row_count](auto& typed_pos_list){
+          auto begin = make_pos_list_begin_iterator(typed_pos_list);
+          std::copy(begin, begin + output_chunk_row_count, output_pos_list->begin());
+        });
       } else {
         referenced_table = input_table;
         for (ChunkOffset chunk_offset = 0; chunk_offset < static_cast<ChunkOffset>(output_chunk_row_count);

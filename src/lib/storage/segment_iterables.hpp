@@ -149,6 +149,7 @@ template <typename Derived>
 class PointAccessibleSegmentIterable : public SegmentIterable<Derived> {
  public:
   using SegmentIterable<Derived>::with_iterators;  // needed because of “name hiding”
+  using SegmentIterable<Derived>::_on_with_iterators;  // needed because of “name hiding”
 
   template <typename Functor>
   void with_iterators(const std::shared_ptr<const AbstractPosList>& position_filter, const Functor& functor) const {
