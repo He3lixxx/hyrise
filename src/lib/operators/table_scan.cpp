@@ -74,7 +74,10 @@ void TableScan::_on_set_parameters(const std::unordered_map<ParameterID, AllType
 std::shared_ptr<AbstractOperator> TableScan::_on_deep_copy(
     const std::shared_ptr<AbstractOperator>& copied_input_left,
     const std::shared_ptr<AbstractOperator>& copied_input_right) const {
-  return std::make_shared<TableScan>(copied_input_left, _predicate->deep_copy());
+  auto copied_scan = std::make_shared<TableScan>(copied_input_left, _predicate->deep_copy());
+  copied_scan->excluded_chunk_ids = excluded_chunk_ids;
+
+  return copied_scan;
 }
 
 std::shared_ptr<const Table> TableScan::_on_execute() {

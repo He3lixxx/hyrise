@@ -67,8 +67,11 @@ std::shared_ptr<const Table> IndexScan::_on_execute() {
 std::shared_ptr<AbstractOperator> IndexScan::_on_deep_copy(
     const std::shared_ptr<AbstractOperator>& copied_input_left,
     const std::shared_ptr<AbstractOperator>& copied_input_right) const {
-  return std::make_shared<IndexScan>(copied_input_left, _index_type, _left_column_ids, _predicate_condition,
+  auto index_scan = std::make_shared<IndexScan>(copied_input_left, _index_type, _left_column_ids, _predicate_condition,
                                      _right_values, _right_values2);
+  index_scan->included_chunk_ids = included_chunk_ids;
+
+  return index_scan;
 }
 
 void IndexScan::_on_set_parameters(const std::unordered_map<ParameterID, AllTypeVariant>& parameters) {}
