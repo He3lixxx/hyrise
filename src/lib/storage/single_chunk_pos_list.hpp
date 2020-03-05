@@ -1,6 +1,7 @@
 #pragma once
 
 #include "abstract_pos_list.hpp"
+#include "storage/index/abstract_index.hpp"
 
 namespace opossum {
 
@@ -9,18 +10,18 @@ class SingleChunkPosList final : public AbstractPosList {
 
   SingleChunkPosList() = delete;
 
-  SingleChunkPosList(ChunkID chunkID) : _chunk_id(chunkID) {};
+  SingleChunkPosList(ChunkID chunkID) : _chunk_id(chunkID) {}
 
   virtual bool empty() const override final {
-    return _offsets.empty();
+    return range_begin == range_end;
   }
   virtual size_t size() const override final {
-    return _offsets.size();
+    return std::distance(range_begin, range_end);
   }
   
   virtual size_t memory_usage(const MemoryUsageCalculationMode) const override final {
-    return sizeof(this) + size() * sizeof(ChunkOffset);
-  };
+    return sizeof(this);
+  }
 
   // TODO
   virtual bool operator==(const AbstractPosList* other) const override final {
@@ -36,12 +37,8 @@ class SingleChunkPosList final : public AbstractPosList {
   }
 
   virtual RowID operator[](size_t n) const override final {
-    return RowID{_chunk_id, _offsets[n]};
+    return RowID{_chunk_id, *(std::next(range_begin, n))};
   }
-
-  std::vector<ChunkOffset>& get_offsets() {
-      return _offsets;
-    }
 
   PosListIterator<const SingleChunkPosList*, RowID> begin() const {
     return PosListIterator<const SingleChunkPosList*, RowID>(this, ChunkOffset{0}, static_cast<ChunkOffset>(size()));
@@ -59,8 +56,10 @@ class SingleChunkPosList final : public AbstractPosList {
     return end();
   }
 
+  AbstractIndex::Iterator range_begin = AbstractIndex::Iterator{};
+  AbstractIndex::Iterator range_end = AbstractIndex::Iterator{};
+
   private:
-    std::vector<ChunkOffset> _offsets;
     ChunkID _chunk_id = INVALID_CHUNK_ID;
 };
 
