@@ -24,6 +24,10 @@ std::shared_ptr<const Table> UnionAll::_on_execute() {
               "Input tables must have same number of columns");
   DebugAssert(input_table_left()->type() == input_table_right()->type(), "Input tables must have the same type");
 
+  if (input_table_right()->row_count() == 0) {
+    return input_table_left();
+  }
+
   auto output_chunks =
       std::vector<std::shared_ptr<Chunk>>{input_table_left()->chunk_count() + input_table_right()->chunk_count()};
   auto output_chunk_idx = size_t{0};
