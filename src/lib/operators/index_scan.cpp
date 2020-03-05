@@ -129,18 +129,19 @@ std::shared_ptr<AbstractPosList> IndexScan::_scan_chunk(const ChunkID chunk_id) 
       break;
     }
     case PredicateCondition::NotEquals: {
+      // TODO, CAUTION: this is currently not workins as is, the strategy would be to return a normal PosList or use an iterator adapter like thing
       // first, get all values less than the search value
-      range_begin = index->cbegin();
-      range_end = index->lower_bound(_right_values);
+      // range_begin = index->cbegin();
+      // range_end = index->lower_bound(_right_values);
 
-      const auto matches_size = std::distance(range_begin, range_end);
-      auto& chunk_offsets = singleChunkPosList->get_offsets();
-      chunk_offsets.resize(matches_size);
+      // const auto matches_size = std::distance(range_begin, range_end);
+      // auto& chunk_offsets = singleChunkPosList->get_offsets();
+      // chunk_offsets.resize(matches_size);
 
-      for (auto matches_position = 0; matches_position < matches_size; ++matches_position) {
-        chunk_offsets[matches_position] = *range_begin;
-        range_begin++;
-      }
+      // for (auto matches_position = 0; matches_position < matches_size; ++matches_position) {
+      //   chunk_offsets[matches_position] = *range_begin;
+      //   range_begin++;
+      // }
       // set range for second half to all values greater than the search value
       range_begin = index->upper_bound(_right_values);
       range_end = index->cend();
@@ -192,15 +193,8 @@ std::shared_ptr<AbstractPosList> IndexScan::_scan_chunk(const ChunkID chunk_id) 
 
   DebugAssert(_in_table->type() == TableType::Data, "Cannot guarantee single chunk PosList for non-data tables.");
 
-  auto& chunk_offsets = singleChunkPosList->get_offsets();
-  const auto previous_matches_size = chunk_offsets.size();
-  const auto matches_size = previous_matches_size + static_cast<size_t>(std::distance(range_begin, range_end));
-  chunk_offsets.resize(matches_size);
-
-  for (auto matches_position = previous_matches_size; matches_position < matches_size; ++matches_position) {
-    chunk_offsets[matches_position] = *range_begin;
-    range_begin++;
-  }
+  singleChunkPosList->range_begin = range_begin;
+  singleChunkPosList->range_end = range_end;
 
   // TODO: Maybe it is more easy to make the singleChunkPosList here, and previously only edit a chunk_offset vector
   return singleChunkPosList;
