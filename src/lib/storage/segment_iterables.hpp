@@ -150,7 +150,7 @@ class PointAccessibleSegmentIterable : public SegmentIterable<Derived> {
     } else {
       DebugAssert(position_filter->references_single_chunk(), "Expected PosList to reference single chunk");
 
-      resolve_pos_list_type(position_filter, [&functor, &position_filter, *this](const auto pos_list) {
+      resolve_pos_list_type(position_filter, [&functor, &position_filter, this](const auto pos_list) {
         _self()._on_with_iterators(position_filter, functor);
       });
     }
