@@ -10,46 +10,25 @@ class SingleChunkPosList final : public AbstractPosList {
 
   SingleChunkPosList() = delete;
 
-  SingleChunkPosList(ChunkID chunkID) : _chunk_id(chunkID) {}
-
-  virtual bool empty() const override final {
-    return range_begin == range_end;
-  }
-  virtual size_t size() const override final {
-    return std::distance(range_begin, range_end);
-  }
-  
-  virtual size_t memory_usage(const MemoryUsageCalculationMode) const override final {
-    return sizeof(this);
+  SingleChunkPosList(ChunkID chunkID) : _chunk_id(chunkID) { 
+    DebugAssert(chunkID != INVALID_CHUNK_ID, "SingleChunkPosList constructed with INVALID_CHUNK_ID");
   }
 
-  virtual bool references_single_chunk() const override final {
-    return true;
-  }
+  virtual bool empty() const override final;
+  virtual size_t size() const override final;
+  virtual size_t memory_usage(const MemoryUsageCalculationMode) const override final;
 
-  virtual ChunkID common_chunk_id() const override final {
-    return _chunk_id;
-  }
+  virtual bool references_single_chunk() const override final;
+  virtual ChunkID common_chunk_id() const override final;
 
   virtual RowID operator[](size_t n) const override final {
     return RowID{_chunk_id, *(std::next(range_begin, n))};
   }
 
-  PosListIterator<const SingleChunkPosList, RowID> begin() const {
-    return PosListIterator<const SingleChunkPosList, RowID>(this, ChunkOffset{0});
-  }
-
-  PosListIterator<const SingleChunkPosList, RowID> end() const {
-    return PosListIterator<const SingleChunkPosList, RowID>(this, static_cast<ChunkOffset>(size()));
-  }
-
-  PosListIterator<const SingleChunkPosList, RowID> cbegin() const {
-    return begin();
-  }
-
-  PosListIterator<const SingleChunkPosList, RowID> cend() const {
-    return end();
-  }
+  PosListIterator<const SingleChunkPosList, RowID> begin() const;
+  PosListIterator<const SingleChunkPosList, RowID> end() const;
+  PosListIterator<const SingleChunkPosList, RowID> cbegin() const;
+  PosListIterator<const SingleChunkPosList, RowID> cend() const;
 
   AbstractIndex::Iterator range_begin = AbstractIndex::Iterator{};
   AbstractIndex::Iterator range_end = AbstractIndex::Iterator{};

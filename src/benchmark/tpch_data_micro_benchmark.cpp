@@ -29,7 +29,7 @@ class TPCHDataMicroBenchmarkFixture : public MicroBenchmarkBasicFixture {
  public:
   void SetUp(::benchmark::State& state) {
     auto& sm = Hyrise::get().storage_manager;
-    const auto scale_factor = 0.01f;
+    const auto scale_factor = 1.0f;
     const auto default_encoding = EncodingType::Dictionary;
 
     auto benchmark_config = BenchmarkConfig::get_default_config();
@@ -152,7 +152,7 @@ BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6IndexScan_Matches_All_Predic
   const std::vector<AllTypeVariant> right_values = {"1600-01-01"};
   for (auto _ : state) {
     const auto table_scan = std::make_shared<IndexScan>(_table_wrapper_map.at("lineitem"), SegmentIndexType::GroupKey,
-                                                        left_column_ids, PredicateCondition::NotEquals, right_values);
+                                                        left_column_ids, PredicateCondition::GreaterThan, right_values);
     table_scan->execute();
   }
 }
@@ -166,7 +166,7 @@ BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6TableScan_After_IndexScan)(b
   const std::vector<ColumnID> left_column_ids = {ColumnID{10}};
   const std::vector<AllTypeVariant> right_values = {"1995-01-01"};
   const auto index_scan = std::make_shared<IndexScan>(_table_wrapper_map.at("lineitem"), SegmentIndexType::GroupKey,
-                                                      left_column_ids, PredicateCondition::NotEquals, right_values);
+                                                      left_column_ids, PredicateCondition::LessThan, right_values);
   index_scan->execute();
 
   const auto scan_result = index_scan->get_output();
@@ -188,7 +188,7 @@ BENCHMARK_F(TPCHDataMicroBenchmarkFixture, BM_TPCHQ6IndexScan_And_TableScan_Toge
 
   for (auto _ : state) {
     const auto index_scan = std::make_shared<IndexScan>(_table_wrapper_map.at("lineitem"), SegmentIndexType::GroupKey,
-                                                        left_column_ids, PredicateCondition::NotEquals, right_values);
+                                                        left_column_ids, PredicateCondition::LessThan, right_values);
     index_scan->execute();
     const auto table_scan = std::make_shared<TableScan>(index_scan, _tpchq6_quantity_predicate);
     table_scan->execute();

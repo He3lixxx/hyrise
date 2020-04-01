@@ -116,12 +116,11 @@ void IndexScan::_validate_input() {
   Assert(_in_table->type() == TableType::Data, "IndexScan only supports persistent tables right now.");
 }
 
-std::shared_ptr<SingleChunkPosList> IndexScan::_scan_chunk(const ChunkID chunk_id) {
+std::shared_ptr<AbstractPosList> IndexScan::_scan_chunk(const ChunkID chunk_id) {
   auto range_begin = AbstractIndex::Iterator{};
   auto range_end = AbstractIndex::Iterator{};
 
   const auto chunk = _in_table->get_chunk(chunk_id);
-  std::vector<ChunkOffset> chunk_offsets;
 
   const auto index = chunk->get_index(_index_type, _left_column_ids);
   Assert(index, "Index of specified type not found for segment (vector).");
@@ -133,14 +132,28 @@ std::shared_ptr<SingleChunkPosList> IndexScan::_scan_chunk(const ChunkID chunk_i
       break;
     }
     case PredicateCondition::NotEquals: {
+      //std::cout << "Used notequals predicate\n";
+
       // TODO, CAUTION: this is currently not workins as is, the strategy would be to return a normal PosList or use an iterator adapter like thing
       // first, get all values less than the search value
-      // range_begin = index->cbegin();
-      // range_end = index->lower_bound(_right_values);
+      auto pos_list = std::make_shared<RowIDPosList>();
+      auto &row_ids = *pos_list;
+      range_begin = index->cbegin();
+      range_end = index->lower_bound(_right_values);
+      row_ids.resize(std::distance(range_begin, range_end));
+      ChunkOffset i = 0;
+      for(auto it = range_begin; it != range_end; it++, i++) {
+        row_ids[i] = RowID{chunk_id, *it};
+      }
 
       // set range for second half to all values greater than the search value
       range_begin = index->upper_bound(_right_values);
       range_end = index->cend();
+      row_ids.resize(row_ids.size() + std::distance(range_begin, range_end));
+      for(auto it = range_begin; it != range_end; it++, i++) {
+        row_ids[i] = RowID{chunk_id, *it};
+      }
+      return pos_list;
       break;
     }
     case PredicateCondition::LessThan: {
@@ -192,7 +205,6 @@ std::shared_ptr<SingleChunkPosList> IndexScan::_scan_chunk(const ChunkID chunk_i
   auto single_chunk_pos_list = std::make_shared<SingleChunkPosList>(chunk_id);
   single_chunk_pos_list->range_begin = range_begin;
   single_chunk_pos_list->range_end = range_end;
-
   return single_chunk_pos_list;
 }
 

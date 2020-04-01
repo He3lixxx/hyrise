@@ -14,23 +14,6 @@ class SingleChunkPosListTest : public BaseTest {
 };
 
 TEST_F(SingleChunkPosListTest, EqualityToPosList) {
-  auto table = load_table("resources/test_data/tbl/float_int.tbl", 10);
-
-  const auto chunkID = ChunkID{0};
-  auto chunk = table->get_chunk(chunkID);
-
-  auto singleChunkPosList = std::make_shared<SingleChunkPosList>(chunkID);
-  auto& offsets = singleChunkPosList->get_offsets();
-
-  auto rowIDPosList = std::make_shared<RowIDPosList>();
-  rowIDPosList->reserve(chunk->size());
-
-  offsets.reserve(chunk->size());
-  for (auto i = ChunkOffset{0}; i < chunk->size(); i++) {
-    offsets.push_back(i);
-    rowIDPosList->push_back(RowID{chunkID, i});
-  }
-
-  EXPECT_TRUE(*singleChunkPosList == *rowIDPosList);
+  // TODO(XPERIANER)
 }
 }  // namespace opossum
