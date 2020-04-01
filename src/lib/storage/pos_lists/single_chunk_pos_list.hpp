@@ -1,34 +1,61 @@
 #pragma once
 
 #include "abstract_pos_list.hpp"
+#include "storage/index/abstract_index.hpp"
 
 namespace opossum {
 
 class SingleChunkPosList final : public AbstractPosList {
- public:
-  explicit SingleChunkPosList(ChunkID chunkID) : _chunk_id(chunkID) {}
-  explicit SingleChunkPosList(ChunkID chunkID, std::vector<ChunkOffset>&& chunk_offsets)
-    : _chunk_id(chunkID), _offsets(std::move(chunk_offsets)) {}
+  public:
 
-  bool empty() const final;
-  size_t size() const final;
+  SingleChunkPosList() = delete;
 
-  size_t memory_usage(const MemoryUsageCalculationMode) const final;
-  bool references_single_chunk() const final;
-  ChunkID common_chunk_id() const final;
+  SingleChunkPosList(ChunkID chunkID) : _chunk_id(chunkID) {}
 
-  RowID operator[](const size_t index) const final { return RowID{_chunk_id, _offsets[index]}; }
+  virtual bool empty() const override final {
+    return range_begin == range_end;
+  }
+  virtual size_t size() const override final {
+    return std::distance(range_begin, range_end);
+  }
+  
+  virtual size_t memory_usage(const MemoryUsageCalculationMode) const override final {
+    return sizeof(this);
+  }
 
-  std::vector<ChunkOffset>& get_offsets();
+  virtual bool references_single_chunk() const override final {
+    return true;
+  }
 
-  PosListIterator<SingleChunkPosList, RowID> begin() const;
-  PosListIterator<SingleChunkPosList, RowID> end() const;
-  PosListIterator<SingleChunkPosList, RowID> cbegin() const;
-  PosListIterator<SingleChunkPosList, RowID> cend() const;
+  virtual ChunkID common_chunk_id() const override final {
+    return _chunk_id;
+  }
 
- private:
-  ChunkID _chunk_id = INVALID_CHUNK_ID;
-  std::vector<ChunkOffset> _offsets;
+  virtual RowID operator[](size_t n) const override final {
+    return RowID{_chunk_id, *(std::next(range_begin, n))};
+  }
+
+  PosListIterator<const SingleChunkPosList, RowID> begin() const {
+    return PosListIterator<const SingleChunkPosList, RowID>(this, ChunkOffset{0});
+  }
+
+  PosListIterator<const SingleChunkPosList, RowID> end() const {
+    return PosListIterator<const SingleChunkPosList, RowID>(this, static_cast<ChunkOffset>(size()));
+  }
+
+  PosListIterator<const SingleChunkPosList, RowID> cbegin() const {
+    return begin();
+  }
+
+  PosListIterator<const SingleChunkPosList, RowID> cend() const {
+    return end();
+  }
+
+  AbstractIndex::Iterator range_begin = AbstractIndex::Iterator{};
+  AbstractIndex::Iterator range_end = AbstractIndex::Iterator{};
+
+  private:
+    ChunkID _chunk_id = INVALID_CHUNK_ID;
 };
 
-}  // namespace opossum
+}

@@ -14,6 +14,8 @@
 
 #include "utils/assert.hpp"
 
+#include "storage/pos_lists/single_chunk_pos_list.hpp"
+
 namespace opossum {
 
 IndexScan::IndexScan(const std::shared_ptr<const AbstractOperator>& in, const SegmentIndexType index_type,
@@ -67,8 +69,11 @@ std::shared_ptr<const Table> IndexScan::_on_execute() {
 std::shared_ptr<AbstractOperator> IndexScan::_on_deep_copy(
     const std::shared_ptr<AbstractOperator>& copied_input_left,
     const std::shared_ptr<AbstractOperator>& copied_input_right) const {
-  return std::make_shared<IndexScan>(copied_input_left, _index_type, _left_column_ids, _predicate_condition,
+  auto index_scan = std::make_shared<IndexScan>(copied_input_left, _index_type, _left_column_ids, _predicate_condition,
                                      _right_values, _right_values2);
+  index_scan->included_chunk_ids = included_chunk_ids;
+
+  return index_scan;
 }
 
 void IndexScan::_on_set_parameters(const std::unordered_map<ParameterID, AllTypeVariant>& parameters) {}
@@ -128,16 +133,11 @@ std::shared_ptr<SingleChunkPosList> IndexScan::_scan_chunk(const ChunkID chunk_i
       break;
     }
     case PredicateCondition::NotEquals: {
+      // TODO, CAUTION: this is currently not workins as is, the strategy would be to return a normal PosList or use an iterator adapter like thing
       // first, get all values less than the search value
-      range_begin = index->cbegin();
-      range_end = index->lower_bound(_right_values);
+      // range_begin = index->cbegin();
+      // range_end = index->lower_bound(_right_values);
 
-      const auto matches_size = std::distance(range_begin, range_end);
-      chunk_offsets.resize(matches_size);
-
-      for (auto matches_position = 0; matches_position < matches_size; ++matches_position, ++range_begin) {
-        chunk_offsets[matches_position] = *range_begin;
-      }
       // set range for second half to all values greater than the search value
       range_begin = index->upper_bound(_right_values);
       range_end = index->cend();
@@ -189,15 +189,11 @@ std::shared_ptr<SingleChunkPosList> IndexScan::_scan_chunk(const ChunkID chunk_i
 
   DebugAssert(_in_table->type() == TableType::Data, "Cannot guarantee single chunk PosList for non-data tables.");
 
-  const auto previous_matches_size = chunk_offsets.size();
-  const auto matches_size = previous_matches_size + static_cast<size_t>(std::distance(range_begin, range_end));
-  chunk_offsets.resize(matches_size);
+  auto single_chunk_pos_list = std::make_shared<SingleChunkPosList>(chunk_id);
+  single_chunk_pos_list->range_begin = range_begin;
+  single_chunk_pos_list->range_end = range_end;
 
-  for (auto matches_position = previous_matches_size; matches_position < matches_size; ++matches_position, ++range_begin) {
-    chunk_offsets[matches_position] = *range_begin;
-  }
-
-  return std::make_shared<SingleChunkPosList>(chunk_id, std::move(chunk_offsets));
+  return single_chunk_pos_list;
 }
 
 }  // namespace opossum
