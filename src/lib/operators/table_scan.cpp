@@ -147,16 +147,18 @@ std::shared_ptr<const Table> TableScan::_on_execute() {
               });
               filtered_pos_list = std::make_shared<SingleChunkPosList>(pos_list_in->common_chunk_id(), std::move(offsets));
             } else {
-              filtered_pos_list = std::make_shared<RowIDPosList>(matches_out->size());
+              auto temp_pos_list = std::make_shared<RowIDPosList>(matches_out->size());
+
               size_t index = 0;
               resolve_pos_list_type(matches_out, [&](auto& typed_matches_out) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wrange-loop-analysis"
                 for (const auto match : *typed_matches_out) {
-                  (*filtered_pos_list)[index++] = (*pos_list_in)[match.chunk_offset];
+                  (*temp_pos_list)[index++] = (*pos_list_in)[match.chunk_offset];
                 }
 #pragma clang diagnostic pop
               });
+              filtered_pos_list = temp_pos_list;
             }
           }
 
