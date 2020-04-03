@@ -10,6 +10,7 @@
 #include "operators/delete.hpp"
 #include "scheduler/job_task.hpp"
 #include "storage/pos_lists/entire_chunk_pos_list.hpp"
+#include "storage/pos_lists/single_chunk_pos_list.hpp"
 #include "storage/reference_segment.hpp"
 #include "utils/assert.hpp"
 
@@ -215,16 +216,15 @@ void Validate::_validate_chunks(const std::shared_ptr<const Table>& in_table, co
         pos_list_out = std::make_shared<EntireChunkPosList>(chunk_id, chunk_in->size());
       } else {
         const auto mvcc_data = chunk_in->mvcc_data();
-        RowIDPosList temp_pos_list;
-        temp_pos_list.guarantee_single_chunk();
-        // Generate pos_list_out.
+        std::vector<ChunkOffset> chunk_offsets;
+
         auto chunk_size = chunk_in->size();  // The compiler fails to optimize this in the for clause :(
         for (auto chunk_offset = 0u; chunk_offset < chunk_size; chunk_offset++) {
           if (opossum::is_row_visible(our_tid, snapshot_commit_id, chunk_offset, *mvcc_data)) {
-            temp_pos_list.emplace_back(RowID{chunk_id, chunk_offset});
+            chunk_offsets.emplace_back(chunk_offset);
           }
         }
-        pos_list_out = std::make_shared<const RowIDPosList>(std::move(temp_pos_list));
+        pos_list_out = std::make_shared<SingleChunkPosList>(chunk_id, std::move(chunk_offsets));
       }
 
       // Create actual ReferenceSegment objects.

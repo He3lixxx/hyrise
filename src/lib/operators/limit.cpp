@@ -10,6 +10,7 @@
 #include "expression/expression_utils.hpp"
 #include "storage/reference_segment.hpp"
 #include "storage/table.hpp"
+#include "storage/pos_lists/entire_chunk_pos_list.hpp"
 
 namespace opossum {
 
@@ -73,22 +74,20 @@ std::shared_ptr<const Table> Limit::_on_execute() {
 
     for (ColumnID column_id{0}; column_id < input_table->column_count(); column_id++) {
       const auto input_base_segment = input_chunk->get_segment(column_id);
-      auto output_pos_list = std::make_shared<RowIDPosList>(output_chunk_row_count);
       std::shared_ptr<const Table> referenced_table;
       ColumnID output_column_id = column_id;
 
+      std::shared_ptr<AbstractPosList> output_pos_list;
       if (auto input_ref_segment = std::dynamic_pointer_cast<const ReferenceSegment>(input_base_segment)) {
         output_column_id = input_ref_segment->referenced_column_id();
         referenced_table = input_ref_segment->referenced_table();
         // TODO(all): optimize using whole chunk whenever possible
         auto begin = input_ref_segment->pos_list()->begin();
-        std::copy(begin, begin + output_chunk_row_count, output_pos_list->begin());
+        output_pos_list = std::make_shared<RowIDPosList>(begin, begin + output_chunk_row_count);
       } else {
         referenced_table = input_table;
-        for (ChunkOffset chunk_offset = 0; chunk_offset < static_cast<ChunkOffset>(output_chunk_row_count);
-             chunk_offset++) {
-          (*output_pos_list)[chunk_offset] = RowID{chunk_id, chunk_offset};
-        }
+
+        output_pos_list = std::make_shared<EntireChunkPosList>(chunk_id, output_chunk_row_count);
       }
 
       output_segments.push_back(

@@ -118,7 +118,7 @@ std::shared_ptr<const Table> TableScan::_on_execute() {
        *     (i.e. they share their position list).
        */
       if (in_table->type() == TableType::References) {
-        auto filtered_pos_lists = std::map<std::shared_ptr<const AbstractPosList>, std::shared_ptr<RowIDPosList>>{};
+        auto filtered_pos_lists = std::map<std::shared_ptr<const AbstractPosList>, std::shared_ptr<AbstractPosList>>{};
 
         for (ColumnID column_id{0u}; column_id < in_table->column_count(); ++column_id) {
           auto segment_in = chunk_in->get_segment(column_id);
@@ -134,16 +134,19 @@ std::shared_ptr<const Table> TableScan::_on_execute() {
           auto& filtered_pos_list = filtered_pos_lists[pos_list_in];
 
           if (!filtered_pos_list) {
-            filtered_pos_list = std::make_shared<RowIDPosList>(matches_out->size());
             if (pos_list_in->references_single_chunk()) {
-              filtered_pos_list->guarantee_single_chunk();
-            }
-
-            size_t offset = 0;
-            for (const auto& match : *matches_out) {
-              const auto row_id = (*pos_list_in)[match.chunk_offset];
-              (*filtered_pos_list)[offset] = row_id;
-              ++offset;
+              size_t index = 0;
+              std::vector<ChunkOffset> offsets(matches_out->size());
+              for (const auto& match : *matches_out) {
+                offsets[index++] = (*pos_list_in)[match.chunk_offset].chunk_offset;
+              }
+              filtered_pos_list = std::make_shared<SingleChunkPosList>(pos_list_in->common_chunk_id(), std::move(offsets));
+            } else {
+              filtered_pos_list = std::make_shared<RowIDPosList>(matches_out->size());
+              size_t index = 0;
+              for (const auto& match : *matches_out) {
+                (*filtered_pos_list)[index++] = (*pos_list_in)[match.chunk_offset];
+              }
             }
           }
 

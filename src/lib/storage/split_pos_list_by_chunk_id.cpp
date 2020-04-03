@@ -16,9 +16,8 @@ PosListsByChunkID split_pos_list_by_chunk_id(const std::shared_ptr<const Abstrac
   for (auto chunk_id = ChunkID{0}; chunk_id < number_of_chunks; ++chunk_id) {
     DebugAssert(chunk_id < number_of_chunks, "Inconsistent number_of_chunks passed");
     auto& mapping = pos_lists_by_chunk_id[chunk_id];
-    mapping.row_ids = std::make_shared<RowIDPosList>();
-    mapping.row_ids->guarantee_single_chunk();
-    mapping.row_ids->reserve(input_pos_list->size() / number_of_chunks);
+    mapping.row_ids = std::make_shared<SingleChunkPosList>(chunk_id);
+    mapping.row_ids->get_offsets().reserve(input_pos_list->size() / number_of_chunks);
     mapping.original_positions.reserve(input_pos_list->size() / number_of_chunks);
   }
 
@@ -32,7 +31,7 @@ PosListsByChunkID split_pos_list_by_chunk_id(const std::shared_ptr<const Abstrac
 
     auto& mapping = pos_lists_by_chunk_id[row_id.chunk_id];
 
-    mapping.row_ids->emplace_back(row_id);
+    mapping.row_ids->get_offsets().emplace_back(row_id.chunk_offset);
     mapping.original_positions.emplace_back(original_position++);
   }
 
