@@ -24,11 +24,11 @@ ColumnIsNullTableScanImpl::ColumnIsNullTableScanImpl(const std::shared_ptr<const
 
 std::string ColumnIsNullTableScanImpl::description() const { return "IsNullScan"; }
 
-std::shared_ptr<RowIDPosList> ColumnIsNullTableScanImpl::scan_chunk(const ChunkID chunk_id) const {
+std::shared_ptr<AbstractPosList> ColumnIsNullTableScanImpl::scan_chunk(const ChunkID chunk_id) const {
   const auto chunk = _in_table->get_chunk(chunk_id);
   const auto& segment = chunk->get_segment(_column_id);
 
-  auto matches = std::make_shared<RowIDPosList>();
+  auto matches = std::make_shared<SingleChunkPosList>(chunk_id);
 
   if (const auto value_segment = std::dynamic_pointer_cast<BaseValueSegment>(segment)) {
     _scan_value_segment(*value_segment, chunk_id, *matches);
@@ -40,7 +40,7 @@ std::shared_ptr<RowIDPosList> ColumnIsNullTableScanImpl::scan_chunk(const ChunkI
 }
 
 void ColumnIsNullTableScanImpl::_scan_generic_segment(const BaseSegment& segment, const ChunkID chunk_id,
-                                                      RowIDPosList& matches) const {
+                                                      SingleChunkPosList& matches) const {
   segment_with_iterators(segment, [&](auto it, [[maybe_unused]] const auto end) {
     // This may also be called for a ValueSegment if `segment` is a ReferenceSegment pointing to a single ValueSegment.
     const auto invert = _predicate_condition == PredicateCondition::IsNotNull;
@@ -51,7 +51,7 @@ void ColumnIsNullTableScanImpl::_scan_generic_segment(const BaseSegment& segment
 }
 
 void ColumnIsNullTableScanImpl::_scan_value_segment(const BaseValueSegment& segment, const ChunkID chunk_id,
-                                                    RowIDPosList& matches) const {
+                                                    SingleChunkPosList& matches) const {
   if (_matches_all(segment)) {
     _add_all(chunk_id, matches, segment.size());
     return;
@@ -96,10 +96,10 @@ bool ColumnIsNullTableScanImpl::_matches_none(const BaseValueSegment& segment) c
   }
 }
 
-void ColumnIsNullTableScanImpl::_add_all(const ChunkID chunk_id, RowIDPosList& matches, const size_t segment_size) {
+void ColumnIsNullTableScanImpl::_add_all(const ChunkID chunk_id, SingleChunkPosList& matches, const size_t segment_size) {
   const auto num_rows = segment_size;
   for (auto chunk_offset = 0u; chunk_offset < num_rows; ++chunk_offset) {
-    matches.emplace_back(RowID{chunk_id, chunk_offset});
+    matches.get_offsets().emplace_back(chunk_offset);
   }
 }
 

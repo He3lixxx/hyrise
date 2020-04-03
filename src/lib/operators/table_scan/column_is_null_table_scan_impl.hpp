@@ -7,6 +7,7 @@
 
 #include "types.hpp"
 #include "utils/assert.hpp"
+#include "storage/pos_lists/single_chunk_pos_list.hpp"
 
 namespace opossum {
 
@@ -23,13 +24,13 @@ class ColumnIsNullTableScanImpl : public AbstractTableScanImpl {
 
   std::string description() const override;
 
-  std::shared_ptr<RowIDPosList> scan_chunk(const ChunkID chunk_id) const override;
+  std::shared_ptr<AbstractPosList> scan_chunk(const ChunkID chunk_id) const override;
 
  protected:
-  void _scan_generic_segment(const BaseSegment& segment, const ChunkID chunk_id, RowIDPosList& matches) const;
+  void _scan_generic_segment(const BaseSegment& segment, const ChunkID chunk_id, SingleChunkPosList& matches) const;
 
   // Optimized scan on ValueSegments
-  void _scan_value_segment(const BaseValueSegment& segment, const ChunkID chunk_id, RowIDPosList& matches) const;
+  void _scan_value_segment(const BaseValueSegment& segment, const ChunkID chunk_id, SingleChunkPosList& matches) const;
 
   /**
    * @defgroup Methods used for handling value segments
@@ -40,7 +41,7 @@ class ColumnIsNullTableScanImpl : public AbstractTableScanImpl {
 
   bool _matches_none(const BaseValueSegment& segment) const;
 
-  static void _add_all(const ChunkID chunk_id, RowIDPosList& matches, const size_t segment_size);
+  static void _add_all(const ChunkID chunk_id, SingleChunkPosList& matches, const size_t segment_size);
 
   /**@}*/
 

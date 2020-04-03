@@ -7,6 +7,7 @@
 #include <array>
 
 #include "storage/pos_lists/row_id_pos_list.hpp"
+#include "storage/pos_lists/single_chunk_pos_list.hpp"
 #include "storage/segment_iterables.hpp"
 #include "storage/segment_iterables/any_segment_iterator.hpp"
 #include "types.hpp"
@@ -23,7 +24,7 @@ class AbstractTableScanImpl {
 
   virtual std::string description() const = 0;
 
-  virtual std::shared_ptr<RowIDPosList> scan_chunk(ChunkID chunk_id) const = 0;
+  virtual std::shared_ptr<AbstractPosList> scan_chunk(ChunkID chunk_id) const = 0;
 
  protected:
   /**
@@ -31,21 +32,21 @@ class AbstractTableScanImpl {
    * @{
    */
 
-  template <bool CheckForNull, typename BinaryFunctor, typename LeftIterator>
+  template <bool CheckForNull, typename BinaryFunctor, typename LeftIterator, typename PosListType>
   static void _scan_with_iterators(const BinaryFunctor func, LeftIterator left_it, const LeftIterator left_end,
-                                   const ChunkID chunk_id, RowIDPosList& matches_out) {
+                                   const ChunkID chunk_id, PosListType& matches_out) {
     // Can't use a default argument for this because default arguments are non-type deduced contexts
     auto false_type = std::false_type{};
     _scan_with_iterators<CheckForNull>(func, left_it, left_end, chunk_id, matches_out, false_type);
   }
 
-  template <bool CheckForNull, typename BinaryFunctor, typename LeftIterator, typename RightIterator>
+  template <bool CheckForNull, typename BinaryFunctor, typename LeftIterator, typename RightIterator, typename PosListType>
   // This is a function that is critical for our performance. We want the compiler to try its best in optimizing it.
   // Also, we want all functions called inside to be inlined (flattened). GCC seems to like for this to not be inlined
   // itself.
   static void __attribute__((hot, flatten, noinline))
   _scan_with_iterators(const BinaryFunctor func, LeftIterator left_it, const LeftIterator left_end,
-                       const ChunkID chunk_id, RowIDPosList& matches_out, [[maybe_unused]] RightIterator right_it) {
+                       const ChunkID chunk_id, PosListType& matches_out, [[maybe_unused]] RightIterator right_it) {
     // The major part of the table is scanned using SIMD. Only the remainder is handled in this method.
     // For a description of the SIMD code, have a look at the comments in that method.
     _simd_scan_with_iterators<CheckForNull>(func, left_it, left_end, chunk_id, matches_out, right_it);
@@ -56,7 +57,13 @@ class AbstractTableScanImpl {
       const auto left = *left_it;
       if constexpr (std::is_same_v<RightIterator, std::false_type>) {
         if ((!CheckForNull || !left.is_null()) && func(left)) {
-          matches_out.emplace_back(RowID{chunk_id, left.chunk_offset()});
+          static_assert(is_any<PosListType, RowIDPosList, SingleChunkPosList>, "Unknown PosListType passed ");
+
+          if constexpr (std::is_same_v<RowIDPosList, PosListType>) {
+            matches_out.emplace_back(RowID{chunk_id, left.chunk_offset()});
+          } else if constexpr (std::is_same_v<SingleChunkPosList, PosListType>) {
+            matches_out.get_offsets().emplace_back(left.chunk_offset());
+          }
         }
       } else {
         const auto right = *right_it;
@@ -68,9 +75,9 @@ class AbstractTableScanImpl {
     }
   }
 
-  template <bool CheckForNull, typename BinaryFunctor, typename LeftIterator, typename RightIterator>
+  template <bool CheckForNull, typename BinaryFunctor, typename LeftIterator, typename RightIterator, typename PosListType>
   static void _simd_scan_with_iterators(const BinaryFunctor func, LeftIterator& left_it, const LeftIterator left_end,
-                                        const ChunkID chunk_id, RowIDPosList& matches_out,
+                                        const ChunkID chunk_id, PosListType& matches_out,
                                         [[maybe_unused]] RightIterator& right_it) {
     // Concept: Partition the vector into blocks of BLOCK_SIZE entries. The remainder is handled by the caller without
     // optimization. We first check if the rows match and set the `mask` to 1 at the appropriate positions.
@@ -94,11 +101,18 @@ class AbstractTableScanImpl {
     constexpr size_t SIMD_SIZE = 256 / 8;
     constexpr size_t BLOCK_SIZE = SIMD_SIZE / sizeof(ChunkOffset);
 
+    static_assert(is_any<PosListType, RowIDPosList, SingleChunkPosList>, "Unknown PosListType passed ");
+
     // The index at which we will write the next matching row
     auto matches_out_index = matches_out.size();
 
     // Make sure that we have enough space for the first iteration. We might resize later on.
-    matches_out.resize(matches_out.size() + BLOCK_SIZE, RowID{chunk_id, 0});
+
+    if constexpr (std::is_same_v<RowIDPosList, PosListType>) {
+      matches_out.resize(matches_out.size() + BLOCK_SIZE, RowID{chunk_id, 0});
+    } else if constexpr (std::is_same_v<SingleChunkPosList, PosListType>) {
+      matches_out.resize(matches_out.size() + BLOCK_SIZE);
+    }
 
     // As we access the offsets after we already moved the iterator, we need a copy of it. Creating this copy outside
     // of the while loop keeps the surprisingly high costs for copying an iterator to a minimum.
@@ -181,7 +195,11 @@ class AbstractTableScanImpl {
       // "Slow" path for non-AVX512VL systems
       for (auto i = size_t{0}; i < BLOCK_SIZE; ++i) {
         if (mask >> i & 1) {
-          matches_out[matches_out_index++].chunk_offset = offsets[i];
+          if constexpr (std::is_same_v<RowIDPosList, PosListType>) {
+            matches_out[matches_out_index++].chunk_offset = offsets[i];
+          } else if constexpr (std::is_same_v<SingleChunkPosList, PosListType>) {
+            matches_out.get_offsets()[matches_out_index++] = offsets[i];
+          }
         }
       }
 
@@ -205,7 +223,11 @@ class AbstractTableScanImpl {
       #pragma omp simd safelen(BLOCK_SIZE)
       // clang-format on
       for (auto i = size_t{0}; i < BLOCK_SIZE; ++i) {
-        matches_out[matches_out_index + i].chunk_offset = (reinterpret_cast<ChunkOffset*>(&offsets_simd))[i];
+        if constexpr (std::is_same_v<RowIDPosList, PosListType>) {
+          matches_out[matches_out_index + i].chunk_offset = (reinterpret_cast<ChunkOffset*>(&offsets_simd))[i];
+        } else if constexpr (std::is_same_v<SingleChunkPosList, PosListType>) {
+          matches_out.offsets[matches_out_index + 1] = (reinterpret_cast<ChunkOffset*>(&offsets_simd))[i];
+        }
       }
 
       // Count the number of matches and increase the index of the next write to matches_out accordingly
@@ -215,7 +237,11 @@ class AbstractTableScanImpl {
       // As we write directly into the matches_out vector, we have to make sure that is big enough. We grow the vector
       // more aggressively than its default behavior as the potentially wasted space is only ephemeral.
       if (matches_out_index + BLOCK_SIZE >= matches_out.size()) {
-        matches_out.resize((BLOCK_SIZE + matches_out.size()) * 3, RowID{chunk_id, 0});
+        if constexpr (std::is_same_v<RowIDPosList, PosListType>) {
+          matches_out.resize((BLOCK_SIZE + matches_out.size()) * 3, RowID{chunk_id, 0});
+        } else if constexpr (std::is_same_v<SingleChunkPosList, PosListType>) {
+          matches_out.resize((BLOCK_SIZE + matches_out.size()) * 3);
+        }
       }
     }
 

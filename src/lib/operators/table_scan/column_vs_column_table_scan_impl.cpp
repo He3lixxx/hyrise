@@ -27,12 +27,12 @@ ColumnVsColumnTableScanImpl::ColumnVsColumnTableScanImpl(const std::shared_ptr<c
 
 std::string ColumnVsColumnTableScanImpl::description() const { return "ColumnVsColumn"; }
 
-std::shared_ptr<RowIDPosList> ColumnVsColumnTableScanImpl::scan_chunk(ChunkID chunk_id) const {
+std::shared_ptr<AbstractPosList> ColumnVsColumnTableScanImpl::scan_chunk(ChunkID chunk_id) const {
   const auto chunk = _in_table->get_chunk(chunk_id);
   const auto left_segment = chunk->get_segment(_left_column_id);
   const auto right_segment = chunk->get_segment(_right_column_id);
 
-  std::shared_ptr<RowIDPosList> result;
+  std::shared_ptr<AbstractPosList> result;
 
   /**
    * Reducing the compile time:
@@ -117,7 +117,7 @@ std::shared_ptr<RowIDPosList> ColumnVsColumnTableScanImpl::scan_chunk(ChunkID ch
 }
 
 template <EraseTypes erase_comparator_type, typename LeftIterable, typename RightIterable>
-std::shared_ptr<RowIDPosList> __attribute__((noinline))
+std::shared_ptr<AbstractPosList> __attribute__((noinline))
 ColumnVsColumnTableScanImpl::_typed_scan_chunk_with_iterables(ChunkID chunk_id, const LeftIterable& left_iterable,
                                                               const RightIterable& right_iterable) const {
   auto matches_out = std::shared_ptr<RowIDPosList>{};

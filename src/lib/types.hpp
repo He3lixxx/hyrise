@@ -18,6 +18,9 @@
 #include "strong_typedef.hpp"
 #include "utils/assert.hpp"
 
+template <class T, class... Ts>
+inline constexpr bool is_any = (std::is_same_v<T, Ts> || ... );
+
 /**
  * We use STRONG_TYPEDEF to avoid things like adding chunk ids and value ids.
  * Because implicit constructors are deleted, you cannot initialize a ChunkID

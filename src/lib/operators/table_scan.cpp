@@ -135,18 +135,28 @@ std::shared_ptr<const Table> TableScan::_on_execute() {
 
           if (!filtered_pos_list) {
             if (pos_list_in->references_single_chunk()) {
-              size_t index = 0;
               std::vector<ChunkOffset> offsets(matches_out->size());
-              for (const auto& match : *matches_out) {
-                offsets[index++] = (*pos_list_in)[match.chunk_offset].chunk_offset;
-              }
+              size_t index = 0;
+              resolve_pos_list_type(matches_out, [&](auto& typed_matches_out) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wrange-loop-analysis"
+                for (const auto match : *typed_matches_out) {
+                  offsets[index++] = (*pos_list_in)[match.chunk_offset].chunk_offset;
+                }
+#pragma clang diagnostic pop
+              });
               filtered_pos_list = std::make_shared<SingleChunkPosList>(pos_list_in->common_chunk_id(), std::move(offsets));
             } else {
               filtered_pos_list = std::make_shared<RowIDPosList>(matches_out->size());
               size_t index = 0;
-              for (const auto& match : *matches_out) {
-                (*filtered_pos_list)[index++] = (*pos_list_in)[match.chunk_offset];
-              }
+              resolve_pos_list_type(matches_out, [&](auto& typed_matches_out) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wrange-loop-analysis"
+                for (const auto match : *typed_matches_out) {
+                  (*filtered_pos_list)[index++] = (*pos_list_in)[match.chunk_offset];
+                }
+#pragma clang diagnostic pop
+              });
             }
           }
 
@@ -154,7 +164,11 @@ std::shared_ptr<const Table> TableScan::_on_execute() {
           out_segments.push_back(ref_segment_out);
         }
       } else {
-        matches_out->guarantee_single_chunk();
+        auto typed_matches_out = std::dynamic_pointer_cast<RowIDPosList>(matches_out);
+        if (typed_matches_out) {
+          typed_matches_out->guarantee_single_chunk();
+        }
+
         for (ColumnID column_id{0u}; column_id < in_table->column_count(); ++column_id) {
           auto ref_segment_out = std::make_shared<ReferenceSegment>(in_table, column_id, matches_out);
           out_segments.push_back(ref_segment_out);

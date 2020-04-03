@@ -27,7 +27,7 @@ class AbstractDereferencedColumnTableScanImpl : public AbstractTableScanImpl {
   AbstractDereferencedColumnTableScanImpl(const std::shared_ptr<const Table>& in_table, const ColumnID column_id,
                                           const PredicateCondition init_predicate_condition);
 
-  std::shared_ptr<RowIDPosList> scan_chunk(const ChunkID chunk_id) const override;
+  std::shared_ptr<AbstractPosList> scan_chunk(const ChunkID chunk_id) const override;
 
   const PredicateCondition predicate_condition;
 

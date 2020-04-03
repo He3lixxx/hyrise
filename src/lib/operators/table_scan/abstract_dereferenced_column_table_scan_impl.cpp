@@ -19,7 +19,7 @@ AbstractDereferencedColumnTableScanImpl::AbstractDereferencedColumnTableScanImpl
     const PredicateCondition init_predicate_condition)
     : predicate_condition(init_predicate_condition), _in_table(in_table), _column_id(column_id) {}
 
-std::shared_ptr<RowIDPosList> AbstractDereferencedColumnTableScanImpl::scan_chunk(const ChunkID chunk_id) const {
+std::shared_ptr<AbstractPosList> AbstractDereferencedColumnTableScanImpl::scan_chunk(const ChunkID chunk_id) const {
   const auto chunk = _in_table->get_chunk(chunk_id);
   const auto& segment = chunk->get_segment(_column_id);
 

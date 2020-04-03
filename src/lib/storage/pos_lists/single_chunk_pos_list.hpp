@@ -26,6 +26,8 @@ class SingleChunkPosList final : public AbstractPosList {
   PosListIterator<SingleChunkPosList, RowID> cbegin() const;
   PosListIterator<SingleChunkPosList, RowID> cend() const;
 
+  void resize(size_t new_size);
+
  private:
   ChunkID _chunk_id = INVALID_CHUNK_ID;
   std::vector<ChunkOffset> _offsets;

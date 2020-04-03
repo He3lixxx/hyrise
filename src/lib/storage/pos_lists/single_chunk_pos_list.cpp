@@ -6,6 +6,8 @@ bool SingleChunkPosList::empty() const { return _offsets.empty(); }
 
 size_t SingleChunkPosList::size() const { return _offsets.size(); }
 
+void SingleChunkPosList::resize(size_t new_size) { _offsets.resize(new_size); }
+
 size_t SingleChunkPosList::memory_usage(const MemoryUsageCalculationMode) const {
   return sizeof(*this) + size() * sizeof(ChunkOffset);
 }
